@@ -6,31 +6,52 @@ const blueColor = 1251009279;
 class CaptchaImageSegmenter {
   async segmentCaptcha(image) {
     await Jimp.read(image).then(async (img) => {
+      // Captcha Segment
       let captchaFrame = await this.getCaptchaFrame(img);
       let captchaImage = img.clone().crop(captchaFrame.frameLeft, captchaFrame.frameTop, captchaFrame.frameWidth, img.bitmap.height - captchaFrame.frameTop);
       captchaImage.write('./testSubjects/captchaImage.png');
 
+      // Instruction Box Segment
       let instructionFrame = await this.getInstructionBoxFrame(captchaImage);
       let instructionImage = captchaImage.clone().crop(instructionFrame.frameLeft, instructionFrame.frameTop, instructionFrame.frameWidth, instructionFrame.frameBottom - instructionFrame.frameTop);
       instructionImage.write('./testSubjects/instructionImage.png');
 
+      // Tile Grid Segment
       let tileGridFrame = await this.getTileGridFrame(captchaImage, instructionFrame);
-      console.log(await this.getColorChangedPosition(instructionImage, blueColor, { x: 25, y: 112 }, 'up'));
-
+      let tileGridImage = captchaImage.clone().crop(tileGridFrame.frameLeft, tileGridFrame.frameTop, tileGridFrame.frameRight, tileGridFrame.frameRight);
+      tileGridImage.write('./testSubjects/tileGrid.png');
     });
   }
 
   async getTileGridFrame(captchaImg, instructionFrame) {
-    return null;
+    return await Jimp.read(captchaImg).then(async (img) => {
+      // Assign the top by moving through the instruction box till the bottom edge is reached
+      // Left and right edges are just the image edges
+      // Go down the left edge until the bottom frame is reached
+      let frameTopPos = await this.getColorChangedPosition(img, {x: instructionFrame.frameLeft, y: instructionFrame.frameBottom}, 'down', blueColor);
+      let frameTop = frameTopPos.y;
+      let frameLeft = 0;
+      let frameRight = img.bitmap.width;
+      let frameBottomPos = await this.getColorChangedPosition(img, {x: frameLeft, y: frameTop}, 'down', whiteColor);
+      let frameBottom = frameBottomPos.y;
+
+      return { frameTop, frameLeft, frameRight, frameBottom };
+    });
   }
 
   async getInstructionBoxFrame(captchaImg) {
     return await Jimp.read(captchaImg).then(async (img) => {
-      let frameTop = await this.getFrameTop(img);
-      let frameEnds = await this.getFrameEnds(img, frameTop);
-      let frameLeft = frameEnds.frameLeftEnd;
-      let frameRight = frameEnds.frameRightEnd;
-      let frameBottom = await this.getInstructionFrameBottom(img, frameTop, frameLeft);
+      // Start from the top-middle and go down till the top of the instruction frame is found
+      // Then find the edges by moving towards the middle until edges are found
+      // Finally move from the left edge down till the bottom is found
+      let frameTopPos = await this.getColorChangedPosition(img, {x: img.bitmap.width/2, y: 0}, 'down', whiteColor);
+      let frameTop = frameTopPos.y;
+      let frameLeftPos = await this.getColorChangedPosition(img, {x: 0, y: frameTop}, 'right', whiteColor);
+      let frameLeft = frameLeftPos.x;
+      let frameRightPos = await this.getColorChangedPosition(img, {x: img.bitmap.width, y: frameTop}, 'left', whiteColor);
+      let frameRight = frameRightPos.x;
+      let frameBottomPos = await this.getColorChangedPosition(img, {x: frameLeft, y: frameTop}, 'down', blueColor);
+      let frameBottom = frameBottomPos.y;
       let frameWidth = img.bitmap.width - frameLeft - (img.bitmap.width - frameRight);
 
       return { frameTop, frameLeft, frameRight, frameWidth, frameBottom };
@@ -39,77 +60,22 @@ class CaptchaImageSegmenter {
 
   async getCaptchaFrame(img) {
     return await Jimp.read(img).then(async (img) => {
-      let frameTop = await this.getFrameTop(img);
-      let frameEnds = await this.getFrameEnds(img, frameTop);
-      let frameLeft = frameEnds.frameLeftEnd;
-      let frameRight = frameEnds.frameRightEnd;
-      let frameWidth = img.bitmap.width - frameLeft - (img.bitmap.width - frameRight);
+      // Start from top-middle and go down till the top of the frame is found
+      // Then find the edges by moving towards the middle until the edges are found
+      let frameTopPos = await this.getColorChangedPosition(img, {x: img.bitmap.width/2, y: 0}, 'down', whiteColor);
+      let frameTop = frameTopPos.y + 1; // +1 since we dont wan't the actual grey frame
+      let frameLeftPos = await this.getColorChangedPosition(img, {x: 0, y: frameTop}, 'right', whiteColor);
+      let frameLeft = frameLeftPos.x + 1; // +1 since we dont wan't the actual grey frame
+      let frameRightPos = await this.getColorChangedPosition(img, {x: img.bitmap.width, y: frameTop}, 'left', whiteColor);
+      let frameRight = frameRightPos.x;
+
+      let frameWidth = (img.bitmap.width - frameLeft) - (img.bitmap.width - frameRight);
 
       return { frameTop, frameLeft, frameRight, frameWidth };
     });
   }
 
-  // Start from top-left corner of instructionBox and go down till bottom is reached
-  async getInstructionFrameBottom(img, frameTop, frameLeft) {
-    let frameBottom = 0;
-
-    return await Jimp.read(img).then((img) => {
-      for (let y = frameTop; y < img.bitmap.height; y++) {
-        if (img.getPixelColor(frameLeft, y) != blueColor) {
-          frameBottom = y;
-          console.log(y);
-
-          break;
-        }
-      }
-      return frameBottom;
-    })
-  }
-
-  // Start from top-middle and go down till the top of the frame is found
-  async getFrameTop(img) {
-    let imageMiddle = img.bitmap.width / 2;
-    let frameTop = 0;
-
-    return await Jimp.read(img).then((img) => {
-      for (let y = 0; y < img.bitmap.height; y++) {
-        if (img.getPixelColor(imageMiddle, y) != whiteColor) {
-          // +1 since we don't want the frame
-          frameTop = y + 1;
-          break;
-        }
-      }
-      return frameTop;
-    });
-  }
-
-  // Start from each side and move towards the middle until both frame ends are found
-  async getFrameEnds(img, frameTop) {
-    let frameLeftEnd = 0;
-    let frameRightEnd = 0;
-
-    return await Jimp.read(img).then((img) => {
-      // First go right until the left end of the frame is found.
-      for (let x = 0; x < img.bitmap.width; x++) {
-        if (img.getPixelColor(x, frameTop) != whiteColor) {
-          // +1 since we don't want the frame
-          frameLeftEnd = x + 1;
-          break;
-        }
-      }
-
-      // Then go left until the right end of the frame is found.
-      for (let x = img.bitmap.width; x > 0; x--) {
-        if (img.getPixelColor(x, frameTop) != whiteColor) {
-          frameRightEnd = x;
-          break;
-        }
-      }
-      return { frameLeftEnd, frameRightEnd };
-    });
-  }
-
-  async getColorChangedPosition(image, color, startPos, direction) {
+  async getColorChangedPosition(image, startPos, direction, color) {
     return await Jimp.read(image).then((img) => {
       if (direction == 'up') {
         for (let y = startPos.y; y > 0; y--) {
@@ -130,13 +96,12 @@ class CaptchaImageSegmenter {
           }
         }
       } else if (direction == 'right') {
-        for (let x = startPos.x; x < img.bitmap.width; x--) {
+        for (let x = startPos.x; x < img.bitmap.width; x++) {
           if (img.getPixelColor(x, startPos.y) != color) {
             return { x: x, y: startPos.y };
           }
         }
       }
-      return pos;
     });
   }
 }
