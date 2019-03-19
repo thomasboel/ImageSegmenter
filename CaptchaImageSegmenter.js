@@ -9,14 +9,19 @@ class CaptchaImageSegmenter {
       let captchaFrame = await this.getCaptchaFrame(img);
       let captchaImage = img.clone().crop(captchaFrame.frameLeft, captchaFrame.frameTop, captchaFrame.frameWidth, img.bitmap.height - captchaFrame.frameTop);
       captchaImage.write('./testSubjects/captchaImage.png');
-  
+
       let instructionFrame = await this.getInstructionBoxFrame(captchaImage);
       let instructionImage = captchaImage.clone().crop(instructionFrame.frameLeft, instructionFrame.frameTop, instructionFrame.frameWidth, instructionFrame.frameBottom - instructionFrame.frameTop);
       instructionImage.write('./testSubjects/instructionImage.png');
 
       let tileGridFrame = await this.getTileGridFrame(captchaImage, instructionFrame);
-      
+      console.log(await this.getColorChangedPosition(instructionImage, blueColor, { x: 25, y: 112 }, 'up'));
+
     });
+  }
+
+  async getTileGridFrame(captchaImg, instructionFrame) {
+    return null;
   }
 
   async getInstructionBoxFrame(captchaImg) {
@@ -28,7 +33,7 @@ class CaptchaImageSegmenter {
       let frameBottom = await this.getInstructionFrameBottom(img, frameTop, frameLeft);
       let frameWidth = img.bitmap.width - frameLeft - (img.bitmap.width - frameRight);
 
-      return {frameTop, frameLeft, frameRight, frameWidth, frameBottom};
+      return { frameTop, frameLeft, frameRight, frameWidth, frameBottom };
     })
   }
 
@@ -40,7 +45,7 @@ class CaptchaImageSegmenter {
       let frameRight = frameEnds.frameRightEnd;
       let frameWidth = img.bitmap.width - frameLeft - (img.bitmap.width - frameRight);
 
-      return {frameTop, frameLeft, frameRight, frameWidth};
+      return { frameTop, frameLeft, frameRight, frameWidth };
     });
   }
 
@@ -53,7 +58,7 @@ class CaptchaImageSegmenter {
         if (img.getPixelColor(frameLeft, y) != blueColor) {
           frameBottom = y;
           console.log(y);
-          
+
           break;
         }
       }
@@ -70,7 +75,7 @@ class CaptchaImageSegmenter {
       for (let y = 0; y < img.bitmap.height; y++) {
         if (img.getPixelColor(imageMiddle, y) != whiteColor) {
           // +1 since we don't want the frame
-          frameTop = y+1;
+          frameTop = y + 1;
           break;
         }
       }
@@ -82,13 +87,13 @@ class CaptchaImageSegmenter {
   async getFrameEnds(img, frameTop) {
     let frameLeftEnd = 0;
     let frameRightEnd = 0;
-    
+
     return await Jimp.read(img).then((img) => {
       // First go right until the left end of the frame is found.
       for (let x = 0; x < img.bitmap.width; x++) {
         if (img.getPixelColor(x, frameTop) != whiteColor) {
           // +1 since we don't want the frame
-          frameLeftEnd = x+1;
+          frameLeftEnd = x + 1;
           break;
         }
       }
@@ -100,7 +105,38 @@ class CaptchaImageSegmenter {
           break;
         }
       }
-      return {frameLeftEnd, frameRightEnd};
+      return { frameLeftEnd, frameRightEnd };
+    });
+  }
+
+  async getColorChangedPosition(image, color, startPos, direction) {
+    return await Jimp.read(image).then((img) => {
+      if (direction == 'up') {
+        for (let y = startPos.y; y > 0; y--) {
+          if (img.getPixelColor(startPos.x, y) != color) {
+            return { x: startPos.x, y: y };
+          }
+        }
+      } else if (direction == 'down') {
+        for (let y = startPos.y; y < img.bitmap.height; y++) {
+          if (img.getPixelColor(startPos.x, y) != color) {
+            return { x: startPos.x, y: y };
+          }
+        }
+      } else if (direction == 'left') {
+        for (let x = startPos.x; x > 0; x--) {
+          if (img.getPixelColor(x, startPos.y) != color) {
+            return { x: x, y: startPos.y };
+          }
+        }
+      } else if (direction == 'right') {
+        for (let x = startPos.x; x < img.bitmap.width; x--) {
+          if (img.getPixelColor(x, startPos.y) != color) {
+            return { x: x, y: startPos.y };
+          }
+        }
+      }
+      return pos;
     });
   }
 }
