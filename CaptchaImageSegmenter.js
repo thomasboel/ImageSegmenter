@@ -18,7 +18,7 @@ class CaptchaImageSegmenter {
 
       // Tile Grid Segment
       let tileGridFrame = await this.getTileGridFrame(captchaImage, instructionFrame);
-      let tileGridImage = captchaImage.clone().crop(tileGridFrame.frameLeft, tileGridFrame.frameTop, tileGridFrame.frameRight, tileGridFrame.frameRight);
+      let tileGridImage = captchaImage.clone().crop(tileGridFrame.frameLeft, tileGridFrame.frameTop, tileGridFrame.frameRight, tileGridFrame.frameHeight);
       tileGridImage.write('./testSubjects/tileGrid.png');
     });
   }
@@ -35,7 +35,9 @@ class CaptchaImageSegmenter {
       let frameBottomPos = await this.getColorChangedPosition(img, {x: frameLeft, y: frameTop}, 'down', whiteColor);
       let frameBottom = frameBottomPos.y;
 
-      return { frameTop, frameLeft, frameRight, frameBottom };
+      let frameHeight = (img.bitmap.height - frameTop) - (img.bitmap.height - frameBottom);
+
+      return { frameTop, frameLeft, frameRight, frameBottom, frameHeight };
     });
   }
 
@@ -52,7 +54,8 @@ class CaptchaImageSegmenter {
       let frameRight = frameRightPos.x;
       let frameBottomPos = await this.getColorChangedPosition(img, {x: frameLeft, y: frameTop}, 'down', blueColor);
       let frameBottom = frameBottomPos.y;
-      let frameWidth = img.bitmap.width - frameLeft - (img.bitmap.width - frameRight);
+      
+      let frameWidth = (img.bitmap.width - frameLeft) - (img.bitmap.width - frameRight);
 
       return { frameTop, frameLeft, frameRight, frameWidth, frameBottom };
     })
