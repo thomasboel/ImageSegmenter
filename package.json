@@ -1,0 +1,22 @@
+{
+  "name": "imagesegmenter",
+  "version": "1.0.0",
+  "description": "",
+  "main": "CaptchaImageSegmenter.js",
+  "scripts": {
+    "test": "node CaptchaImageSegmenter.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/thomasboel/ImageSegmenter.git"
+  },
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/thomasboel/ImageSegmenter/issues"
+  },
+  "homepage": "https://github.com/thomasboel/ImageSegmenter#readme",
+  "dependencies": {
+    "jimp": "^0.6.0"
+  }
+}
