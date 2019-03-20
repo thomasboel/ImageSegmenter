@@ -4,35 +4,82 @@ const whiteColor = 4294967295;
 const blueColor = 1251009279;
 
 class CaptchaImageSegmenter {
-  async segmentCaptcha(image, folder) {
-    await Jimp.read(image).then(async (img) => {
-      // Captcha Segment
-      let captchaFrame = await this.getCaptchaFrame(img);
-      let captchaImage = img.clone().crop(captchaFrame.frameLeft, captchaFrame.frameTop, captchaFrame.frameWidth, img.bitmap.height - captchaFrame.frameTop);
-      captchaImage.write('./testSubjects/' + folder + '/' + 'captchaImage.png');
-
-      // Instruction Box Segment
-      let instructionFrame = await this.getInstructionBoxFrame(captchaImage);
-      let instructionImage = captchaImage.clone().crop(instructionFrame.frameLeft, instructionFrame.frameTop, instructionFrame.frameWidth, instructionFrame.frameBottom - instructionFrame.frameTop);
-      instructionImage.write('./testSubjects/' + folder + '/' + 'instructionImage.png');
+  // Return base64 tile matrix
+  static async getTileMatrix(img) {
+    return await Jimp.read(img).then(async (img) => {
+      let instructionImage = await this.getInstructionImage(img);
 
       // Tile Grid Segment
       let tileGridFrame = await this.getTileGridFrame(captchaImage, instructionFrame);
       let tileGridImage = captchaImage.clone().crop(tileGridFrame.frameLeft, tileGridFrame.frameTop, tileGridFrame.frameRight, tileGridFrame.frameHeight);
-      tileGridImage.write('./testSubjects/' + folder + '/' + 'tileGrid.png');
 
-      // Tile Segmentation
-      let tiles = await this.getTilesInGrid(tileGridImage);
-
-      for (let i = 0; i < tiles.length; i++) {
-        let tileImage = tileGridImage.clone().crop(tiles[i].tileTopLeft.x, tiles[i].tileTopLeft.y, tiles[i].width, tiles[i].height);
-        let tileImageName = ('./testSubjects/' + folder + '/' + 'c' + tiles[i].column.toString() + '_' + 'r' + tiles[i].row.toString() + '.png');
-        tileImage.write(tileImageName);
-      }
+      return null;
     });
   }
 
-  async getCaptchaFrame(img) {
+  // Return base64 instruction image
+  static async getInstructionImage(img) {
+    return await Jimp.read(image).then(async (img) => {
+      // Captcha Segment
+      let captchaFrame = await this.getCaptchaFrame(img);
+      let captchaImage = img.clone().crop(captchaFrame.frameLeft, captchaFrame.frameTop, captchaFrame.frameWidth, img.bitmap.height - captchaFrame.frameTop);
+
+      // Instruction Box Segment
+      let instructionFrame = await this.getInstructionBoxFrame(captchaImage);
+      let instructionImage = captchaImage.clone().crop(instructionFrame.frameLeft, instructionFrame.frameTop, instructionFrame.frameWidth, instructionFrame.frameBottom - instructionFrame.frameTop);
+      return await instructionImage.getBase64Async(Jimp.MIME_PNG);
+    });
+  }
+
+  // Return the middle position for every tile in the tile matrix
+  static async getClickPosMatrix(img) {
+
+  }
+
+  static getTileGridOffset(captchaFrame, instructionFrame) {
+    let heightOffset = captchaFrame.frameTop + instructionFrame.frameTop + instructionFrame.frameHeight;
+    let widthOffset = captchaFrame.frameLeft;
+    return { heightOffset, widthOffset };
+  }
+
+  static async segmentCaptcha(image, folder) {
+    return await Jimp.read(image).then(async (img) => {
+      // Captcha Segment
+      let captchaFrame = await this.getCaptchaFrame(img);
+      let captchaImage = img.clone().crop(captchaFrame.frameLeft, captchaFrame.frameTop, captchaFrame.frameWidth, img.bitmap.height - captchaFrame.frameTop);
+      // captchaImage.write('./testSubjects/' + folder + '/' + 'captchaImage.png');
+
+      // Instruction Box Segment
+      let instructionFrame = await this.getInstructionBoxFrame(captchaImage);
+      let instructionImage = captchaImage.clone().crop(instructionFrame.frameLeft, instructionFrame.frameTop, instructionFrame.frameWidth, instructionFrame.frameBottom - instructionFrame.frameTop);
+      // instructionImage.write('./testSubjects/' + folder + '/' + 'instructionImage.png');
+
+      // Tile Grid Segment
+      let tileGridFrame = await this.getTileGridFrame(captchaImage, instructionFrame);
+      let tileGridImage = captchaImage.clone().crop(tileGridFrame.frameLeft, tileGridFrame.frameTop, tileGridFrame.frameRight, tileGridFrame.frameHeight);
+      // tileGridImage.write('./testSubjects/' + folder + '/' + 'tileGrid.png');
+
+      // Tile Segmentation
+      let tiles = await this.getTilesInGrid(tileGridImage);
+      let tilesBase64Array = [];
+
+      let offset = this.getTileGridOffset(captchaFrame, instructionFrame);
+
+      for (let i = 0; i < tiles.length; i++) {
+        let tileImage = tileGridImage.clone().crop(tiles[i].tileTopLeft.x, tiles[i].tileTopLeft.y, tiles[i].width, tiles[i].height);
+          // let tileImageName = ('./testSubjects/' + folder + '/' + 'c' + tiles[i].column.toString() + '_' + 'r' + tiles[i].row.toString() + '.png');
+          tilesBase64Array.push(await tileImage.getBase64Async(Jimp.MIME_PNG));
+          // tileImage.write(tileImageName);
+      }
+
+      let tilesBase64Matrix = [];
+      // TODO: Create the empty matrix with the right dimensions. Loop through array and insert using the tile's row and column index.  
+
+      return {};
+    });
+  }
+
+  static async getCaptchaFrame(img) {
     return await Jimp.read(img).then(async (img) => {
       // Start from top-middle and go down till the top of the frame is found
       // Then find the edges by moving towards the middle until the edges are found
@@ -49,7 +96,7 @@ class CaptchaImageSegmenter {
     });
   }
 
-  async getInstructionBoxFrame(captchaImg) {
+  static async getInstructionBoxFrame(captchaImg) {
     return await Jimp.read(captchaImg).then(async (img) => {
       // Start from the top-middle and go down till the top of the instruction frame is found
       // Then find the edges by moving towards the middle until edges are found
@@ -64,12 +111,13 @@ class CaptchaImageSegmenter {
       let frameBottom = frameBottomPos.y;
 
       let frameWidth = (img.bitmap.width - frameLeft) - (img.bitmap.width - frameRight);
+      let frameHeight = (frameBottom - frameTop);
 
-      return { frameTop, frameLeft, frameRight, frameWidth, frameBottom };
+      return { frameTop, frameLeft, frameRight, frameBottom, frameWidth, frameHeight };
     });
   }
 
-  async getTileGridFrame(captchaImg, instructionFrame) {
+  static async getTileGridFrame(captchaImg, instructionFrame) {
     return await Jimp.read(captchaImg).then(async (img) => {
       // Assign the top by moving through the instruction box till the bottom edge is reached
       // Left and right edges are just the image edges
@@ -87,7 +135,7 @@ class CaptchaImageSegmenter {
     });
   }
 
-  async getTilesInGrid(tileGridImg) {
+  static async getTilesInGrid(tileGridImg) {
     return await Jimp.read(tileGridImg).then(async (img) => {
       let tiles = [];
 
@@ -98,7 +146,7 @@ class CaptchaImageSegmenter {
 
       // Find the top-left corner for all the tiles
       let tileTopLeftPositions = await this.getAllTileTopLeftCorners(img, firstTile);
-      
+
       // Define all the tiles from the top-left corner and push them to the tiles array
       for (let row = 0; row < tileTopLeftPositions.length; row++) {
         for (let tileRowIndex = 0; tileRowIndex < tileTopLeftPositions[row].length; tileRowIndex++) {
@@ -114,7 +162,7 @@ class CaptchaImageSegmenter {
     });
   }
 
-  async getAllTileTopLeftCorners(tileGridImg, firstTile) {
+  static async getAllTileTopLeftCorners(tileGridImg, firstTile) {
     return await Jimp.read(tileGridImg).then(async (img) => {
       let tileTopLeftPositions = [];
 
@@ -130,7 +178,8 @@ class CaptchaImageSegmenter {
       return tileTopLeftPositions;
     });
   }
-  async scanTilesInDirection(tileGridImg, firstTileTopLeft, direction) {
+
+  static async scanTilesInDirection(tileGridImg, firstTileTopLeft, direction) {
     return await Jimp.read(tileGridImg).then(async (img) => {
       let tileTopLeftPositions = [];
       // We're returning an array of tiles' top-left corners, so here we just add the initial tile we're scanning from
@@ -144,7 +193,7 @@ class CaptchaImageSegmenter {
       // Keep looking for tiles until flag is false, meaning there are no further tiles in given direction
       for (let i = 0; flag; i++) {
         let tileLeftPos = await this.getNextTileLeftPos(img, currTileTopLeft, direction);
-        
+
         if (tileLeftPos == null) {
           flag = false;
           break;
@@ -152,19 +201,19 @@ class CaptchaImageSegmenter {
         tileTopLeftPositions.push(tileLeftPos);
         currTileTopLeft = tileLeftPos;
       }
-      
+
       return tileTopLeftPositions;
     });
   }
 
-  async getNextTileLeftPos(tileGridImg, previousTileLeftPos, direction) {
+  static async getNextTileLeftPos(tileGridImg, previousTileLeftPos, direction) {
     return await Jimp.read(tileGridImg).then(async (img) => {
       let tileRightPos = await this.getColorOccurencePosition(img, previousTileLeftPos, direction, whiteColor);
       return await this.getColorChangedPosition(img, tileRightPos, direction, whiteColor);
     });
   }
 
-  async defineTileFromTopLeft(tileGridImg, tileTopLeft) {
+  static async defineTileFromTopLeft(tileGridImg, tileTopLeft) {
     return await Jimp.read(tileGridImg).then(async (img) => {
       // Find the rest of the corners for that tile
       let tileTopRight = await this.getColorOccurencePosition(img, tileTopLeft, 'right', whiteColor);
@@ -175,12 +224,13 @@ class CaptchaImageSegmenter {
       tileBottomRight.y--; // Remove the white edge
       let width = tileTopRight.x - tileTopLeft.x;
       let height = tileBottomLeft.y - tileTopLeft.y;
+      let middle = { x: Math.round(tileTopLeft.x + width / 2), y: Math.round(tileTopLeft.y + height / 2) };
 
-      return { tileTopLeft, tileTopRight, tileBottomLeft, tileBottomRight, width, height };
+      return { tileTopLeft, tileTopRight, tileBottomLeft, tileBottomRight, width, height, middle };
     });
   }
 
-  async defineFirstTile(tileGridImg) {
+  static async defineFirstTile(tileGridImg) {
     return await Jimp.read(tileGridImg).then(async (img) => {
       let topLeft;
 
@@ -197,7 +247,7 @@ class CaptchaImageSegmenter {
     });
   }
 
-  async getColorChangedPosition(image, startPos, direction, color) {
+  static async getColorChangedPosition(image, startPos, direction, color) {
     return await Jimp.read(image).then((img) => {
       if (direction == 'up') {
         for (let y = startPos.y; y > 0; y--) {
@@ -228,7 +278,7 @@ class CaptchaImageSegmenter {
     });
   }
 
-  async getColorOccurencePosition(image, startPos, direction, color) {
+  static async getColorOccurencePosition(image, startPos, direction, color) {
     return await Jimp.read(image).then((img) => {
       if (direction == 'up') {
         for (let y = startPos.y; y > 0; y--) {
@@ -265,8 +315,7 @@ var img_grid_2x4_error = './testSubjects/2x4_full_witherror.png';
 var img_grid_3x3 = './testSubjects/3x3_full.png';
 var img_grid_4x4 = './testSubjects/4x4_full.png';
 
-var captchaImageSegmenter = new CaptchaImageSegmenter();
-captchaImageSegmenter.segmentCaptcha(img_grid_2x4, '2x4');
-captchaImageSegmenter.segmentCaptcha(img_grid_2x4_error, '2x4_error');
-captchaImageSegmenter.segmentCaptcha(img_grid_3x3, '3x3');
-captchaImageSegmenter.segmentCaptcha(img_grid_4x4, '4x4');
+// captchaImageSegmenter.segmentCaptcha(img_grid_2x4, '2x4');
+// captchaImageSegmenter.segmentCaptcha(img_grid_2x4_error, '2x4_error');
+CaptchaImageSegmenter.segmentCaptcha(img_grid_3x3, '3x3');
+// captchaImageSegmenter.segmentCaptcha(img_grid_4x4, '4x4');
