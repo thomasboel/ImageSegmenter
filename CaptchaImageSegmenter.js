@@ -23,7 +23,7 @@ class CaptchaImageSegmenter {
 
       // Tile Segmentation
       let tiles = await this.getTilesInGrid(tileGridImage);
-    });
+    }).catch(err => console.log("Failed to segment captcha!"));
   }
 
   async getCaptchaFrame(img) {
@@ -40,7 +40,7 @@ class CaptchaImageSegmenter {
       let frameWidth = (img.bitmap.width - frameLeft) - (img.bitmap.width - frameRight);
 
       return { frameTop, frameLeft, frameRight, frameWidth };
-    });
+    }).catch(err => console.log("There was an error segmenting the Captcha frame"));
   }
 
   async getInstructionBoxFrame(captchaImg) {
@@ -60,7 +60,7 @@ class CaptchaImageSegmenter {
       let frameWidth = (img.bitmap.width - frameLeft) - (img.bitmap.width - frameRight);
 
       return { frameTop, frameLeft, frameRight, frameWidth, frameBottom };
-    })
+    }).catch(err => console.log("There was an error segmenting the Instruction Box frame"));
   }
 
   async getTileGridFrame(captchaImg, instructionFrame) {
@@ -78,7 +78,7 @@ class CaptchaImageSegmenter {
       let frameHeight = (img.bitmap.height - frameTop) - (img.bitmap.height - frameBottom);
 
       return { frameTop, frameLeft, frameRight, frameBottom, frameHeight };
-    });
+    }).catch(err => console.log("There was an error segmenting the Tile Grid"));
   }
 
   async getTilesInGrid(tileGridImg) {
@@ -87,24 +87,28 @@ class CaptchaImageSegmenter {
 
       // Find the first tile (top-left tile)
       let firstTile = await this.defineFirstTile(img);
-      // Find the grid size
-      let tileGridSize = this.getTileGridSize(firstTile, img.bitmap.width, img.bitmap.height);
-      
-      
+
+
       return tiles;
-    });
+    }).catch(err => console.log("There was an error segmenting the Tiles in the Grid"));
   }
 
-  getTileGridSize(firstTile, fullWidth, fullHeight) {
-    let columns = Math.floor(fullWidth / firstTile.width);
-    let rows = Math.floor(fullHeight / firstTile.height);
-    return { rows, columns };
+  async defineTileFromTopLeft(tileGridImg, tileTopLeft) {
+    return await Jimp.read(tileGridImg).then(async (img) => {
+      // Find the rest of the corners for that tile
+      let tileTopRight = await this.getColorOccurence(img, tileTopLeft, 'right', whiteColor);
+      let tileBottomLeft = await this.getColorOccurence(img, tileTopLeft, 'down', whiteColor);
+      let tileBottomRight = await this.getColorOccurence(img, tileTopRight, 'down', whiteColor);
+      let width = tileTopRight.x - tileTopLeft.x;
+      let height = tileBottomLeft.y - tileTopLeft.y;
+
+      return { tileTopLeft, tileTopRight, tileBottomLeft, tileBottomRight, width, height };
+    }).catch(err => console.log("There was an error defining the Tile with the given top-left position"));
   }
 
   async defineFirstTile(tileGridImg) {
     return await Jimp.read(tileGridImg).then(async (img) => {
-      let topLeft, topRight, bottomLeft, bottomRight;
-      let width, height;
+      let topLeft;
 
       // Find top-left corner of the first tile
       for (let x = 0; x < img.bitmap.width; x++) {
@@ -114,16 +118,9 @@ class CaptchaImageSegmenter {
           break;
         }
       }
-      // Find the rest of the corners for that tile
-      topRight = await this.getColorOccurence(img, topLeft, 'right', whiteColor);
-      bottomLeft = await this.getColorOccurence(img, topLeft, 'down', whiteColor);
-      bottomRight = await this.getColorOccurence(img, topRight, 'down', whiteColor);
-
-      width = topRight.x - topLeft.x;
-      height = bottomLeft.y - topLeft.y;
-
-      return { topLeft, topRight, bottomLeft, bottomRight, width, height };
-    });
+      // Rest of the corners
+      return this.defineTileFromTopLeft(img, topLeft);
+    }).catch(err => console.log("There was an error finding the top-left corner of the first Tile"));
   }
 
   async getColorChangedPosition(image, startPos, direction, color) {
@@ -154,7 +151,7 @@ class CaptchaImageSegmenter {
         }
       }
       return null;
-    });
+    }).catch(err => console.log("Error in getColorChangedPosition..."));
   }
 
   async getColorOccurence(image, startPos, direction, color) {
@@ -185,7 +182,7 @@ class CaptchaImageSegmenter {
         }
       }
       return null;
-    });
+    }).catch(err => console.log("Error in getColorOccurence..."));
   }
 }
 
