@@ -4,32 +4,32 @@ const whiteColor = 4294967295;
 const blueColor = 1251009279;
 
 class CaptchaImageSegmenter {
-  async segmentCaptcha(image) {
+  async segmentCaptcha(image, folder) {
     await Jimp.read(image).then(async (img) => {
       // Captcha Segment
       let captchaFrame = await this.getCaptchaFrame(img);
       let captchaImage = img.clone().crop(captchaFrame.frameLeft, captchaFrame.frameTop, captchaFrame.frameWidth, img.bitmap.height - captchaFrame.frameTop);
-      captchaImage.write('./testSubjects/captchaImage.png');
+      captchaImage.write('./testSubjects/' + folder + '/' + 'captchaImage.png');
 
       // Instruction Box Segment
       let instructionFrame = await this.getInstructionBoxFrame(captchaImage);
       let instructionImage = captchaImage.clone().crop(instructionFrame.frameLeft, instructionFrame.frameTop, instructionFrame.frameWidth, instructionFrame.frameBottom - instructionFrame.frameTop);
-      instructionImage.write('./testSubjects/instructionImage.png');
+      instructionImage.write('./testSubjects/' + folder + '/' + 'instructionImage.png');
 
       // Tile Grid Segment
       let tileGridFrame = await this.getTileGridFrame(captchaImage, instructionFrame);
       let tileGridImage = captchaImage.clone().crop(tileGridFrame.frameLeft, tileGridFrame.frameTop, tileGridFrame.frameRight, tileGridFrame.frameHeight);
-      tileGridImage.write('./testSubjects/tileGrid.png');
+      tileGridImage.write('./testSubjects/' + folder + '/' + 'tileGrid.png');
 
       // Tile Segmentation
       let tiles = await this.getTilesInGrid(tileGridImage);
 
       for (let i = 0; i < tiles.length; i++) {
         let tileImage = tileGridImage.clone().crop(tiles[i].tileTopLeft.x, tiles[i].tileTopLeft.y, tiles[i].width, tiles[i].height);
-        let tileImageName = ('./testSubjects/' + 'c' + tiles[i].column.toString() + '_' + 'r' + tiles[i].row.toString() + '.png');
+        let tileImageName = ('./testSubjects/' + folder + '/' + 'c' + tiles[i].column.toString() + '_' + 'r' + tiles[i].row.toString() + '.png');
         tileImage.write(tileImageName);
       }
-    }).catch(err => console.log("Failed to segment captcha!"));
+    });
   }
 
   async getCaptchaFrame(img) {
@@ -46,7 +46,7 @@ class CaptchaImageSegmenter {
       let frameWidth = (img.bitmap.width - frameLeft) - (img.bitmap.width - frameRight);
 
       return { frameTop, frameLeft, frameRight, frameWidth };
-    }).catch(err => console.log("There was an error segmenting the Captcha frame"));
+    });
   }
 
   async getInstructionBoxFrame(captchaImg) {
@@ -66,7 +66,7 @@ class CaptchaImageSegmenter {
       let frameWidth = (img.bitmap.width - frameLeft) - (img.bitmap.width - frameRight);
 
       return { frameTop, frameLeft, frameRight, frameWidth, frameBottom };
-    }).catch(err => console.log("There was an error segmenting the Instruction Box frame"));
+    });
   }
 
   async getTileGridFrame(captchaImg, instructionFrame) {
@@ -84,7 +84,7 @@ class CaptchaImageSegmenter {
       let frameHeight = (img.bitmap.height - frameTop) - (img.bitmap.height - frameBottom);
 
       return { frameTop, frameLeft, frameRight, frameBottom, frameHeight };
-    }).catch(err => console.log("There was an error segmenting the Tile Grid"));
+    });
   }
 
   async getTilesInGrid(tileGridImg) {
@@ -96,8 +96,10 @@ class CaptchaImageSegmenter {
       firstTile.row = 0;
       firstTile.column = 0;
 
+      // Find the top-left corner for all the tiles
       let tileTopLeftPositions = await this.getAllTileTopLeftCorners(img, firstTile);
       
+      // Define all the tiles from the top-left corner and push them to the tiles array
       for (let row = 0; row < tileTopLeftPositions.length; row++) {
         for (let tileRowIndex = 0; tileRowIndex < tileTopLeftPositions[row].length; tileRowIndex++) {
           let tileTopLeft = tileTopLeftPositions[row][tileRowIndex];
@@ -109,7 +111,7 @@ class CaptchaImageSegmenter {
       }
 
       return tiles;
-    }).catch(err => console.log("There was an error segmenting the Tiles in the Grid"));
+    });
   }
 
   async getAllTileTopLeftCorners(tileGridImg, firstTile) {
@@ -119,6 +121,7 @@ class CaptchaImageSegmenter {
       // Find all the top-left corners of the first column by scanning for all tiles below the first tile
       let firstColumn = await this.scanTilesInDirection(img, firstTile.tileTopLeft, 'down');
 
+      // Find all the top-left corners of the tiles in every row
       for (let i = 0; i < firstColumn.length; i++) {
         let row = await this.scanTilesInDirection(img, firstColumn[i], 'right');
         tileTopLeftPositions.push(row);
@@ -156,7 +159,7 @@ class CaptchaImageSegmenter {
 
   async getNextTileLeftPos(tileGridImg, previousTileLeftPos, direction) {
     return await Jimp.read(tileGridImg).then(async (img) => {
-      let tileRightPos = await this.getColorOccurence(img, previousTileLeftPos, direction, whiteColor);
+      let tileRightPos = await this.getColorOccurencePosition(img, previousTileLeftPos, direction, whiteColor);
       return await this.getColorChangedPosition(img, tileRightPos, direction, whiteColor);
     });
   }
@@ -164,20 +167,17 @@ class CaptchaImageSegmenter {
   async defineTileFromTopLeft(tileGridImg, tileTopLeft) {
     return await Jimp.read(tileGridImg).then(async (img) => {
       // Find the rest of the corners for that tile
-      let tileTopRight = await this.getColorOccurence(img, tileTopLeft, 'right', whiteColor);
-      tileTopRight.x--;
-      // console.log(tileTopRight);
-      
-      let tileBottomLeft = await this.getColorOccurence(img, tileTopLeft, 'down', whiteColor);
-      tileBottomLeft.y--;
-      let tileBottomRight = await this.getColorOccurence(img, tileTopRight, 'down', whiteColor);
-      tileBottomRight.y--;
-      // console.log(tileBottomRight);
+      let tileTopRight = await this.getColorOccurencePosition(img, tileTopLeft, 'right', whiteColor);
+      tileTopRight.x--; // Remove the white edge
+      let tileBottomLeft = await this.getColorOccurencePosition(img, tileTopLeft, 'down', whiteColor);
+      tileBottomLeft.y--; // Remove the white edge
+      let tileBottomRight = await this.getColorOccurencePosition(img, tileTopRight, 'down', whiteColor);
+      tileBottomRight.y--; // Remove the white edge
       let width = tileTopRight.x - tileTopLeft.x;
       let height = tileBottomLeft.y - tileTopLeft.y;
 
       return { tileTopLeft, tileTopRight, tileBottomLeft, tileBottomRight, width, height };
-    }).catch(err => console.log("There was an error defining the Tile with the given top-left position"));
+    });
   }
 
   async defineFirstTile(tileGridImg) {
@@ -194,7 +194,7 @@ class CaptchaImageSegmenter {
       }
       // Rest of the corners
       return this.defineTileFromTopLeft(img, topLeft);
-    }).catch(err => console.log("There was an error finding the top-left corner of the first Tile"));
+    });
   }
 
   async getColorChangedPosition(image, startPos, direction, color) {
@@ -225,10 +225,10 @@ class CaptchaImageSegmenter {
         }
       }
       return null;
-    }).catch(err => console.log("Error in getColorChangedPosition..."));
+    });
   }
 
-  async getColorOccurence(image, startPos, direction, color) {
+  async getColorOccurencePosition(image, startPos, direction, color) {
     return await Jimp.read(image).then((img) => {
       if (direction == 'up') {
         for (let y = startPos.y; y > 0; y--) {
@@ -256,10 +256,17 @@ class CaptchaImageSegmenter {
         }
       }
       return null;
-    }).catch(err => console.log("Error in getColorOccurence..."));
+    });
   }
 }
 
+var img_grid_2x4 = './testSubjects/2x4_full.png';
+var img_grid_2x4_error = './testSubjects/2x4_full_witherror.png';
 var img_grid_3x3 = './testSubjects/3x3_full.png';
+var img_grid_4x4 = './testSubjects/4x4_full.png';
+
 var captchaImageSegmenter = new CaptchaImageSegmenter();
-captchaImageSegmenter.segmentCaptcha(img_grid_3x3);
+captchaImageSegmenter.segmentCaptcha(img_grid_2x4, '2x4');
+captchaImageSegmenter.segmentCaptcha(img_grid_2x4_error, '2x4_error');
+captchaImageSegmenter.segmentCaptcha(img_grid_3x3, '3x3');
+captchaImageSegmenter.segmentCaptcha(img_grid_4x4, '4x4');

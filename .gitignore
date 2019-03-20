@@ -74,3 +74,9 @@ typings/
 
 # FuseBox cache
 .fusebox/
+
+# Image Segmenter Output
+testSubjects/2x4/*
+testSubjects/2x4_error/*
+testSubjects/3x3/*
+testSubjects/4x4/*
