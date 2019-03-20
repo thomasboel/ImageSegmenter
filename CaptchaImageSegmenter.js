@@ -23,6 +23,12 @@ class CaptchaImageSegmenter {
 
       // Tile Segmentation
       let tiles = await this.getTilesInGrid(tileGridImage);
+
+      for (let i = 0; i < tiles.length; i++) {
+        let tileImage = tileGridImage.clone().crop(tiles[i].tileTopLeft.x, tiles[i].tileTopLeft.y, tiles[i].width, tiles[i].height);
+        let tileImageName = ('./testSubjects/' + 'c' + tiles[i].column.toString() + '_' + 'r' + tiles[i].row.toString() + '.png');
+        tileImage.write(tileImageName);
+      }
     }).catch(err => console.log("Failed to segment captcha!"));
   }
 
@@ -85,20 +91,88 @@ class CaptchaImageSegmenter {
     return await Jimp.read(tileGridImg).then(async (img) => {
       let tiles = [];
 
-      // Find the first tile (top-left tile)
+      // Find and define the first tile (top-left tile)
       let firstTile = await this.defineFirstTile(img);
+      firstTile.row = 0;
+      firstTile.column = 0;
 
+      let tileTopLeftPositions = await this.getAllTileTopLeftCorners(img, firstTile);
+      
+      for (let row = 0; row < tileTopLeftPositions.length; row++) {
+        for (let tileRowIndex = 0; tileRowIndex < tileTopLeftPositions[row].length; tileRowIndex++) {
+          let tileTopLeft = tileTopLeftPositions[row][tileRowIndex];
+          let tile = await this.defineTileFromTopLeft(img, tileTopLeft);
+          tile.row = row;
+          tile.column = tileRowIndex;
+          tiles.push(tile);
+        }
+      }
 
       return tiles;
     }).catch(err => console.log("There was an error segmenting the Tiles in the Grid"));
+  }
+
+  async getAllTileTopLeftCorners(tileGridImg, firstTile) {
+    return await Jimp.read(tileGridImg).then(async (img) => {
+      let tileTopLeftPositions = [];
+
+      // Find all the top-left corners of the first column by scanning for all tiles below the first tile
+      let firstColumn = await this.scanTilesInDirection(img, firstTile.tileTopLeft, 'down');
+
+      for (let i = 0; i < firstColumn.length; i++) {
+        let row = await this.scanTilesInDirection(img, firstColumn[i], 'right');
+        tileTopLeftPositions.push(row);
+      }
+
+      return tileTopLeftPositions;
+    });
+  }
+  async scanTilesInDirection(tileGridImg, firstTileTopLeft, direction) {
+    return await Jimp.read(tileGridImg).then(async (img) => {
+      let tileTopLeftPositions = [];
+      // We're returning an array of tiles' top-left corners, so here we just add the initial tile we're scanning from
+      tileTopLeftPositions.push(firstTileTopLeft);
+
+      // Flag is set to false when there are no more tiles in the given direction
+      let flag = true;
+      // The current tile in reference. We use this for the getNextTileLeftPos() method which returns the tile immediatly next to it in a given direction
+      let currTileTopLeft = firstTileTopLeft;
+
+      // Keep looking for tiles until flag is false, meaning there are no further tiles in given direction
+      for (let i = 0; flag; i++) {
+        let tileLeftPos = await this.getNextTileLeftPos(img, currTileTopLeft, direction);
+        
+        if (tileLeftPos == null) {
+          flag = false;
+          break;
+        }
+        tileTopLeftPositions.push(tileLeftPos);
+        currTileTopLeft = tileLeftPos;
+      }
+      
+      return tileTopLeftPositions;
+    });
+  }
+
+  async getNextTileLeftPos(tileGridImg, previousTileLeftPos, direction) {
+    return await Jimp.read(tileGridImg).then(async (img) => {
+      let tileRightPos = await this.getColorOccurence(img, previousTileLeftPos, direction, whiteColor);
+      return await this.getColorChangedPosition(img, tileRightPos, direction, whiteColor);
+    });
   }
 
   async defineTileFromTopLeft(tileGridImg, tileTopLeft) {
     return await Jimp.read(tileGridImg).then(async (img) => {
       // Find the rest of the corners for that tile
       let tileTopRight = await this.getColorOccurence(img, tileTopLeft, 'right', whiteColor);
+      tileTopRight.x--;
+      // console.log(tileTopRight);
+      
       let tileBottomLeft = await this.getColorOccurence(img, tileTopLeft, 'down', whiteColor);
+      tileBottomLeft.y--;
       let tileBottomRight = await this.getColorOccurence(img, tileTopRight, 'down', whiteColor);
+      tileBottomRight.y--;
+      // console.log(tileBottomRight);
       let width = tileTopRight.x - tileTopLeft.x;
       let height = tileBottomLeft.y - tileTopLeft.y;
 
