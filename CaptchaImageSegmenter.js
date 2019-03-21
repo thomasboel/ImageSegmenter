@@ -7,13 +7,34 @@ class CaptchaImageSegmenter {
   // Return base64 tile matrix
   static async getTileMatrix(img) {
     return await Jimp.read(img).then(async (img) => {
-      let instructionImage = await this.getInstructionImage(img);
+      // Captcha Segment
+      let captchaFrame = await this.getCaptchaFrame(img);
+      let captchaImage = img.clone().crop(captchaFrame.frameLeft, captchaFrame.frameTop, captchaFrame.frameWidth, img.bitmap.height - captchaFrame.frameTop);
+
+      // Instruction Box Segment
+      let instructionFrame = await this.getInstructionBoxFrame(captchaImage);
 
       // Tile Grid Segment
       let tileGridFrame = await this.getTileGridFrame(captchaImage, instructionFrame);
       let tileGridImage = captchaImage.clone().crop(tileGridFrame.frameLeft, tileGridFrame.frameTop, tileGridFrame.frameRight, tileGridFrame.frameHeight);
 
-      return null;
+      // Tile Segmentation
+      let tiles = await this.getTilesInGrid(tileGridImage);
+
+      let tilesBase64Matrix = [];
+      let matrixSize = { columns: tiles[tiles.length-1].column+1, rows: tiles[tiles.length-1].row+1 }; 
+      
+      for (let i = 0; i < matrixSize.rows; i++) {
+        tilesBase64Matrix.push(new Array(matrixSize.columns));
+      }
+
+      for (let i = 0; i < tiles.length; i++) {
+        let tileImage = tileGridImage.clone().crop(tiles[i].tileTopLeft.x, tiles[i].tileTopLeft.y, tiles[i].width, tiles[i].height);
+        let tileBase64 = await tileImage.getBase64Async(Jimp.MIME_PNG);
+        tilesBase64Matrix[tiles[i].row][tiles[i].column] = tileBase64;
+      }
+
+      return tilesBase64Matrix;
     });
   }
 
@@ -33,7 +54,39 @@ class CaptchaImageSegmenter {
 
   // Return the middle position for every tile in the tile matrix
   static async getClickPosMatrix(img) {
+    return await Jimp.read(image).then(async (img) => {
+      // Captcha Segment
+      let captchaFrame = await this.getCaptchaFrame(img);
+      let captchaImage = img.clone().crop(captchaFrame.frameLeft, captchaFrame.frameTop, captchaFrame.frameWidth, img.bitmap.height - captchaFrame.frameTop);
 
+      // Instruction Box Segment
+      let instructionFrame = await this.getInstructionBoxFrame(captchaImage);
+
+      // Tile Grid Segment
+      let tileGridFrame = await this.getTileGridFrame(captchaImage, instructionFrame);
+      let tileGridImage = captchaImage.clone().crop(tileGridFrame.frameLeft, tileGridFrame.frameTop, tileGridFrame.frameRight, tileGridFrame.frameHeight);
+
+      // Tile Segmentation
+
+      // Offset for tilegrid in the full pic.
+      let offset = this.getTileGridOffset(captchaFrame, instructionFrame);
+
+      let tiles = await this.getTilesInGrid(tileGridImage);
+
+      let tileClickMatrix = [];
+      let matrixSize = { columns: tiles[tiles.length-1].column+1, rows: tiles[tiles.length-1].row+1 }; 
+      
+      for (let i = 0; i < matrixSize.rows; i++) {
+        tileClickMatrix.push(new Array(matrixSize.columns));
+      }
+
+      for (let i = 0; i < tiles.length; i++) {
+        let tileClickPos = { x: tiles[i].middle.x + offset.widthOffset, y: tiles[i].middle.heightOffset };
+        tileClickMatrix[tiles[i].row][tiles[i].column] = tileClickPos;
+      }
+
+      return tileClickMatrix;
+    });
   }
 
   static getTileGridOffset(captchaFrame, instructionFrame) {
@@ -47,35 +100,26 @@ class CaptchaImageSegmenter {
       // Captcha Segment
       let captchaFrame = await this.getCaptchaFrame(img);
       let captchaImage = img.clone().crop(captchaFrame.frameLeft, captchaFrame.frameTop, captchaFrame.frameWidth, img.bitmap.height - captchaFrame.frameTop);
-      // captchaImage.write('./testSubjects/' + folder + '/' + 'captchaImage.png');
+      captchaImage.write('./testSubjects/' + folder + '/' + 'captchaImage.png');
 
       // Instruction Box Segment
       let instructionFrame = await this.getInstructionBoxFrame(captchaImage);
       let instructionImage = captchaImage.clone().crop(instructionFrame.frameLeft, instructionFrame.frameTop, instructionFrame.frameWidth, instructionFrame.frameBottom - instructionFrame.frameTop);
-      // instructionImage.write('./testSubjects/' + folder + '/' + 'instructionImage.png');
+      instructionImage.write('./testSubjects/' + folder + '/' + 'instructionImage.png');
 
       // Tile Grid Segment
       let tileGridFrame = await this.getTileGridFrame(captchaImage, instructionFrame);
       let tileGridImage = captchaImage.clone().crop(tileGridFrame.frameLeft, tileGridFrame.frameTop, tileGridFrame.frameRight, tileGridFrame.frameHeight);
-      // tileGridImage.write('./testSubjects/' + folder + '/' + 'tileGrid.png');
+      tileGridImage.write('./testSubjects/' + folder + '/' + 'tileGrid.png');
 
       // Tile Segmentation
       let tiles = await this.getTilesInGrid(tileGridImage);
-      let tilesBase64Array = [];
-
-      let offset = this.getTileGridOffset(captchaFrame, instructionFrame);
 
       for (let i = 0; i < tiles.length; i++) {
         let tileImage = tileGridImage.clone().crop(tiles[i].tileTopLeft.x, tiles[i].tileTopLeft.y, tiles[i].width, tiles[i].height);
-          // let tileImageName = ('./testSubjects/' + folder + '/' + 'c' + tiles[i].column.toString() + '_' + 'r' + tiles[i].row.toString() + '.png');
-          tilesBase64Array.push(await tileImage.getBase64Async(Jimp.MIME_PNG));
-          // tileImage.write(tileImageName);
+        let tileImageName = ('./testSubjects/' + folder + '/' + 'c' + tiles[i].column.toString() + '_' + 'r' + tiles[i].row.toString() + '.png');
+        tileImage.write(tileImageName);
       }
-
-      let tilesBase64Matrix = [];
-      // TODO: Create the empty matrix with the right dimensions. Loop through array and insert using the tile's row and column index.  
-
-      return {};
     });
   }
 
