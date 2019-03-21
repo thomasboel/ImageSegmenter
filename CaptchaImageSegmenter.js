@@ -5,8 +5,8 @@ const blueColor = 1251009279;
 
 class CaptchaImageSegmenter {
   // Return base64 tile matrix
-  static async getTileMatrix(img) {
-    return await Jimp.read(img).then(async (img) => {
+  static async getTileMatrix(image) {
+    return await Jimp.read(image).then(async (img) => {
       // Captcha Segment
       let captchaFrame = await this.getCaptchaFrame(img);
       let captchaImage = img.clone().crop(captchaFrame.frameLeft, captchaFrame.frameTop, captchaFrame.frameWidth, img.bitmap.height - captchaFrame.frameTop);
@@ -39,7 +39,7 @@ class CaptchaImageSegmenter {
   }
 
   // Return base64 instruction image
-  static async getInstructionImage(img) {
+  static async getInstructionImage(image) {
     return await Jimp.read(image).then(async (img) => {
       // Captcha Segment
       let captchaFrame = await this.getCaptchaFrame(img);
@@ -53,7 +53,7 @@ class CaptchaImageSegmenter {
   }
 
   // Return the middle position for every tile in the tile matrix
-  static async getClickPosMatrix(img) {
+  static async getClickPosMatrix(image) {
     return await Jimp.read(image).then(async (img) => {
       // Captcha Segment
       let captchaFrame = await this.getCaptchaFrame(img);
@@ -81,9 +81,12 @@ class CaptchaImageSegmenter {
       }
 
       for (let i = 0; i < tiles.length; i++) {
-        let tileClickPos = { x: tiles[i].middle.x + offset.widthOffset, y: tiles[i].middle.heightOffset };
+        let tileClickPos = { x: tiles[i].middle.x + offset.widthOffset, y: tiles[i].middle.y + offset.heightOffset };
         tileClickMatrix[tiles[i].row][tiles[i].column] = tileClickPos;
       }
+
+      console.log(tileClickMatrix);
+      
 
       return tileClickMatrix;
     });
@@ -123,8 +126,8 @@ class CaptchaImageSegmenter {
     });
   }
 
-  static async getCaptchaFrame(img) {
-    return await Jimp.read(img).then(async (img) => {
+  static async getCaptchaFrame(image) {
+    return await Jimp.read(image).then(async (img) => {
       // Start from top-middle and go down till the top of the frame is found
       // Then find the edges by moving towards the middle until the edges are found
       let frameTopPos = await this.getColorChangedPosition(img, { x: img.bitmap.width / 2, y: 0 }, 'down', whiteColor);
@@ -359,7 +362,8 @@ var img_grid_2x4_error = './testSubjects/2x4_full_witherror.png';
 var img_grid_3x3 = './testSubjects/3x3_full.png';
 var img_grid_4x4 = './testSubjects/4x4_full.png';
 
-// captchaImageSegmenter.segmentCaptcha(img_grid_2x4, '2x4');
-// captchaImageSegmenter.segmentCaptcha(img_grid_2x4_error, '2x4_error');
-CaptchaImageSegmenter.segmentCaptcha(img_grid_3x3, '3x3');
-// captchaImageSegmenter.segmentCaptcha(img_grid_4x4, '4x4');
+// CaptchaImageSegmenter.segmentCaptcha(img_grid_2x4, '2x4');
+// CaptchaImageSegmenter.segmentCaptcha(img_grid_2x4_error, '2x4_error');
+// CaptchaImageSegmenter.segmentCaptcha(img_grid_3x3, '3x3');
+// CaptchaImageSegmenter.segmentCaptcha(img_grid_4x4, '4x4');
+CaptchaImageSegmenter.getClickPosMatrix(img_grid_3x3);
