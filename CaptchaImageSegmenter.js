@@ -85,9 +85,6 @@ class CaptchaImageSegmenter {
         tileClickMatrix[tiles[i].row][tiles[i].column] = tileClickPos;
       }
 
-      console.log(tileClickMatrix);
-      
-
       return tileClickMatrix;
     });
   }
