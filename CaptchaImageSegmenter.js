@@ -2,6 +2,7 @@ var Jimp = require('jimp');
 
 const whiteColor = 4294967295;
 const blueColor = 1251009279;
+const loginBtnColor = 62521343;
 
 class CaptchaImageSegmenter {
   // Return base64 tile matrix
@@ -86,6 +87,37 @@ class CaptchaImageSegmenter {
       }
 
       return tileClickMatrix;
+    });
+  }
+
+  static async getLoginButtonClickPos(image) {
+    return await Jimp.read(image).then(async (img) => {
+      // Login Button Frame
+      let topMiddle = { x: img.bitmap.width/2, y: 0 };
+      for (let y = 0; y < img.bitmap.height; y++) {
+        // 2 pixel thick border means login button
+        if (img.getPixelColor(img.bitmap.width/2, y) == loginBtnColor && img.getPixelColor(img.bitmap.width/2, y+1) == loginBtnColor) {
+          topMiddle.y = y;
+          break;
+        }
+      }
+      return { x: topMiddle.x, y: topMiddle.y+16 };
+    });
+  }
+
+  static async isCaptchaMulti(image) {
+    return await Jimp.read(image).then(async (img) => {
+      // Captcha Segment
+      let captchaFrame = await this.getCaptchaFrame(img);
+      let captchaImage = img.clone().crop(captchaFrame.frameLeft, captchaFrame.frameTop, captchaFrame.frameWidth, img.bitmap.height - captchaFrame.frameTop);
+
+      // Instruction Box Segment
+      let instructionFrame = await this.getInstructionBoxFrame(captchaImage);
+      let instructionImage = captchaImage.clone().crop(instructionFrame.frameLeft, instructionFrame.frameTop, instructionFrame.frameWidth, instructionFrame.frameBottom - instructionFrame.frameTop);
+
+      let isTextOrImgFound = await this.getColorChangedPosition(instructionImage, { x: 250, y: 0 }, 'down', blueColor);
+      let isMulti = isTextOrImgFound == null ? false : true; 
+      return isMulti;
     });
   }
 
@@ -359,8 +391,18 @@ var img_grid_2x4_error = './testSubjects/2x4_full_witherror.png';
 var img_grid_3x3 = './testSubjects/3x3_full.png';
 var img_grid_4x4 = './testSubjects/4x4_full.png';
 
+var captcha_done = './testSubjects/captcha_done.png';
+
+var multi_nopic = './testSubjects/multi no pic.png';
+var multi_pic = './testSubjects/multi pic.png';
+var not_multi_nopic = './testSubjects/not multi no pic.png';
+var skip = './testSubjects/skip.png';
+
 // CaptchaImageSegmenter.segmentCaptcha(img_grid_2x4, '2x4');
 // CaptchaImageSegmenter.segmentCaptcha(img_grid_2x4_error, '2x4_error');
 // CaptchaImageSegmenter.segmentCaptcha(img_grid_3x3, '3x3');
 // CaptchaImageSegmenter.segmentCaptcha(img_grid_4x4, '4x4');
-CaptchaImageSegmenter.getClickPosMatrix(img_grid_3x3);
+// CaptchaImageSegmenter.getClickPosMatrix(img_grid_3x3);
+// CaptchaImageSegmenter.getLoginButtonClickPos(captcha_done);
+
+CaptchaImageSegmenter.isCaptchaMulti(skip);
