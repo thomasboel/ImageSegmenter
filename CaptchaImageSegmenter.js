@@ -23,8 +23,8 @@ class CaptchaImageSegmenter {
       let tiles = await this.getTilesInGrid(tileGridImage);
 
       let tilesBase64Matrix = [];
-      let matrixSize = { columns: tiles[tiles.length-1].column+1, rows: tiles[tiles.length-1].row+1 }; 
-      
+      let matrixSize = { columns: tiles[tiles.length - 1].column + 1, rows: tiles[tiles.length - 1].row + 1 };
+
       for (let i = 0; i < matrixSize.rows; i++) {
         tilesBase64Matrix.push(new Array(matrixSize.columns));
       }
@@ -75,8 +75,8 @@ class CaptchaImageSegmenter {
       let tiles = await this.getTilesInGrid(tileGridImage);
 
       let tileClickMatrix = [];
-      let matrixSize = { columns: tiles[tiles.length-1].column+1, rows: tiles[tiles.length-1].row+1 }; 
-      
+      let matrixSize = { columns: tiles[tiles.length - 1].column + 1, rows: tiles[tiles.length - 1].row + 1 };
+
       for (let i = 0; i < matrixSize.rows; i++) {
         tileClickMatrix.push(new Array(matrixSize.columns));
       }
@@ -93,15 +93,15 @@ class CaptchaImageSegmenter {
   static async getLoginButtonClickPos(image) {
     return await Jimp.read(image).then(async (img) => {
       // Login Button Frame
-      let topMiddle = { x: img.bitmap.width/2, y: 0 };
+      let topMiddle = { x: img.bitmap.width / 2, y: 0 };
       for (let y = 0; y < img.bitmap.height; y++) {
         // 2 pixel thick border means login button
-        if (img.getPixelColor(img.bitmap.width/2, y) == loginBtnColor && img.getPixelColor(img.bitmap.width/2, y+1) == loginBtnColor) {
+        if (img.getPixelColor(img.bitmap.width / 2, y) == loginBtnColor && img.getPixelColor(img.bitmap.width / 2, y + 1) == loginBtnColor) {
           topMiddle.y = y;
           break;
         }
       }
-      return { x: topMiddle.x, y: topMiddle.y+16 };
+      return { x: topMiddle.x, y: topMiddle.y + 16 };
     });
   }
 
@@ -116,7 +116,7 @@ class CaptchaImageSegmenter {
       let instructionImage = captchaImage.clone().crop(instructionFrame.frameLeft, instructionFrame.frameTop, instructionFrame.frameWidth, instructionFrame.frameBottom - instructionFrame.frameTop);
 
       let isTextOrImgFound = await this.getColorChangedPosition(instructionImage, { x: 250, y: 0 }, 'down', blueColor);
-      let isMulti = isTextOrImgFound == null ? false : true; 
+      let isMulti = isTextOrImgFound == null ? false : true;
       return isMulti;
     });
   }
@@ -147,12 +147,37 @@ class CaptchaImageSegmenter {
       // Tile Segmentation
       let tiles = await this.getTilesInGrid(tileGridImage);
 
+      this.reworkTileFrames(tiles);
+
       for (let i = 0; i < tiles.length; i++) {
         let tileImage = tileGridImage.clone().crop(tiles[i].tileTopLeft.x, tiles[i].tileTopLeft.y, tiles[i].width, tiles[i].height);
         let tileImageName = ('./testSubjects/' + folder + '/' + 'c' + tiles[i].column.toString() + '_' + 'r' + tiles[i].row.toString() + '.png');
         tileImage.write(tileImageName);
       }
     });
+  }
+
+  /* 
+    This method was added as of v2 to prevent images with complete white pixels (FFFFFF) to break the tile grid image segmentation.
+    The idea is to use the width and height of the tiles after finding the most popular width and height for all tiles to create the tile frames.
+  */
+  static reworkTileFrames(tiles) {
+    // Find the most popular width and height
+    let widthArray = [], heightArray = [];
+
+    for (let i = 0; i < tiles.length; i++) {
+      widthArray.push(tiles[i].width);
+      heightArray.push(tiles[i].height);
+    }
+
+    let popularWidth = this.mode(widthArray);
+    let popularHeight = this.mode(heightArray);
+
+    console.log("popular_width", popularWidth);
+    console.log("popular_height", popularHeight);
+    
+
+    // Return a new tile array based on the 
   }
 
   static async getCaptchaFrame(image) {
@@ -384,12 +409,33 @@ class CaptchaImageSegmenter {
       return null;
     });
   }
+
+  static mode(array) {
+    if (array.length == 0)
+      return null;
+    var modeMap = {};
+    var maxEl = array[0], maxCount = 1;
+    for (var i = 0; i < array.length; i++) {
+      var el = array[i];
+      if (modeMap[el] == null)
+        modeMap[el] = 1;
+      else
+        modeMap[el]++;
+      if (modeMap[el] > maxCount) {
+        maxEl = el;
+        maxCount = modeMap[el];
+      }
+    }
+    return maxEl;
+  }
 }
 
 var img_grid_2x4 = './testSubjects/2x4_full.png';
 var img_grid_2x4_error = './testSubjects/2x4_full_witherror.png';
 var img_grid_3x3 = './testSubjects/3x3_full.png';
 var img_grid_4x4 = './testSubjects/4x4_full.png';
+
+var fixThis = './testSubjects/FIX THIS.png';
 
 var captcha_done = './testSubjects/captcha_done.png';
 
@@ -404,5 +450,6 @@ var skip = './testSubjects/skip.png';
 // CaptchaImageSegmenter.segmentCaptcha(img_grid_4x4, '4x4');
 // CaptchaImageSegmenter.getClickPosMatrix(img_grid_3x3);
 // CaptchaImageSegmenter.getLoginButtonClickPos(captcha_done);
+CaptchaImageSegmenter.segmentCaptcha(fixThis, 'fix');
 
-CaptchaImageSegmenter.isCaptchaMulti(skip);
+// CaptchaImageSegmenter.isCaptchaMulti(skip);
